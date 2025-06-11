@@ -1,2 +1,2 @@
-# reservation
-core service for resource reservation
+# Reservation
+Core service for resource reservation
