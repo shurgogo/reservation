@@ -73,8 +73,9 @@ pub struct GetResponse {
     #[prost(message, optional, tag = "1")]
     pub reservation: ::core::option::Option<Reservation>,
 }
+/// query reservations with user id, resource id, status, start time, end time
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct QueryRequest {
+pub struct ReservationQuery {
     #[prost(string, tag = "1")]
     pub resource_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
@@ -87,6 +88,11 @@ pub struct QueryRequest {
     #[prost(message, optional, tag = "5")]
     pub end: ::core::option::Option<::prost_types::Timestamp>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryRequest {
+    #[prost(message, optional, tag = "1")]
+    pub query: ::core::option::Option<ReservationQuery>,
+}
 /// Client subscribe to reservation updates
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct SubscribeRequest {}
@@ -97,7 +103,9 @@ pub struct SubscribeResponse {
     #[prost(message, optional, tag = "2")]
     pub reservation: ::core::option::Option<Reservation>,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[derive(
+    sqlx::Type, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+)]
 #[repr(i32)]
 pub enum ReservationStatus {
     Unknown = 0,
