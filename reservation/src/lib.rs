@@ -1,10 +1,7 @@
 mod manager;
 
+use abi::ReservationId;
 use sqlx::PgPool;
-
-pub type ReservationId = String;
-pub type UserId = String;
-pub type ResourceId = String;
 
 // interact with the database asynchronously
 #[async_trait::async_trait]
@@ -19,6 +16,8 @@ pub trait Rsvp {
         id: ReservationId,
         note: String,
     ) -> Result<abi::Reservation, abi::Error>;
+    /// get reservation
+    async fn get(&self, id: ReservationId) -> Result<abi::Reservation, abi::Error>;
     /// delete reservation
     async fn delete(&self, id: ReservationId) -> Result<(), abi::Error>;
     /// query reservations
