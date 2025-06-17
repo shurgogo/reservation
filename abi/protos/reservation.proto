@@ -85,6 +85,12 @@ message ReservationQuery {
     ReservationStatus status = 3;
     google.protobuf.Timestamp start = 4;
     google.protobuf.Timestamp end = 5;
+    // current page for the query
+    int32 page = 6;
+    // page size for the query
+    int32 page_size = 7;
+    // sort direction
+    bool desc = 8;
 }
 
 message QueryRequest {

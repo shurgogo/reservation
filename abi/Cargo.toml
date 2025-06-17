@@ -6,12 +6,13 @@ edition = "2024"
 
 [dependencies]
 chrono = { version = "0.4.41", features = ["serde"] }
+derive_builder = "0.20.2"
 prost = "0.13.5"
 prost-types = "0.13.5"
 regex = "1.11.1"
 sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid"] }
 thiserror = "2.0.12"
-tonic = "0.13.1"
+tonic = { version = "0.13.1", features = ["gzip"] }
 
 [build-dependencies]
 tonic-build = "0.13.1"

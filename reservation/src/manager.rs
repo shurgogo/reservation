@@ -1,4 +1,4 @@
-use abi::ReservationId;
+use abi::{ReservationId, ReservationQuery, ReservationStatus, Validator};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::postgres::types::PgRange;
@@ -12,9 +12,8 @@ impl Rsvp for ReservationManager {
         rsvp.validate()?;
         let mut rsvp_clone = rsvp.clone();
 
-        let timespan: PgRange<DateTime<Utc>> = rsvp.get_timespan().into();
-        let status = abi::ReservationStatus::try_from(rsvp.status)
-            .unwrap_or(abi::ReservationStatus::Pending);
+        let timespan: PgRange<DateTime<Utc>> = rsvp.get_timespan();
+        let status = ReservationStatus::try_from(rsvp.status).unwrap_or(ReservationStatus::Pending);
 
         // generate an insert sql for the reservation
         let id: Uuid = sqlx::query(
@@ -80,11 +79,26 @@ impl Rsvp for ReservationManager {
         Ok(rsvp)
     }
 
-    async fn query(
-        &self,
-        _query: abi::ReservationQuery,
-    ) -> Result<Vec<abi::Reservation>, abi::Error> {
-        todo!()
+    async fn query(&self, query: ReservationQuery) -> Result<Vec<abi::Reservation>, abi::Error> {
+        let user_id = str_to_option(&query.user_id);
+        let resource_id = str_to_option(&query.resource_id);
+        let range = query.get_timespan();
+        let status =
+            ReservationStatus::try_from(query.status).unwrap_or(ReservationStatus::Pending);
+        let rsvps = sqlx::query_as(
+            "SELECT * FROM rsvp.query($1, $2, $3, $4::rsvp.reservation_status, $5, $6, $7)",
+        )
+        .bind(user_id)
+        .bind(resource_id)
+        .bind(range)
+        .bind(status.to_string())
+        .bind(query.page)
+        .bind(query.desc)
+        .bind(query.page_size)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rsvps)
     }
 }
 
@@ -94,12 +108,16 @@ impl ReservationManager {
     }
 }
 
+fn str_to_option(s: &str) -> Option<&str> {
+    if s.is_empty() { None } else { Some(s) }
+}
 #[cfg(test)]
 mod tests {
     use abi::{
-        Reservation, ReservationConflict, ReservationConflictInfo, ReservationStatus,
-        ReservationWindow,
+        Reservation, ReservationConflict, ReservationConflictInfo, ReservationQueryBuilder,
+        ReservationStatus, ReservationWindow,
     };
+    use prost_types::Timestamp;
     use sqlx::PgPool;
 
     use super::*;
@@ -180,6 +198,32 @@ mod tests {
         manager.delete(rsvp.id.clone()).await.unwrap();
         let rsvp1 = manager.get(rsvp.id).await.unwrap_err();
         assert_eq!(rsvp1, abi::Error::NotFound);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn query_reservations_should_work(pool: PgPool) {
+        let (rsvp, manager) = make_shur_reservation(pool).await;
+        let query = ReservationQueryBuilder::default()
+            .user_id("shurid")
+            .start("2025-05-12T15:00:00-0700".parse::<Timestamp>().unwrap())
+            .end("2025-05-15T12:00:00-0700".parse::<Timestamp>().unwrap())
+            .status(ReservationStatus::Pending as i32)
+            .build()
+            .unwrap();
+
+        let rsvps = manager.query(query).await.unwrap();
+        assert_eq!(rsvps.len(), 1);
+        assert_eq!(rsvps[0], rsvp);
+
+        let query = ReservationQueryBuilder::default()
+            .user_id("shurid")
+            .start("2025-05-13T16:00:00-0700".parse::<Timestamp>().unwrap())
+            .end("2025-05-15T12:00:00-0700".parse::<Timestamp>().unwrap())
+            .status(ReservationStatus::Pending as i32)
+            .build()
+            .unwrap();
+        let rsvps = manager.query(query).await.unwrap();
+        assert!(rsvps.is_empty());
     }
 
     async fn make_shur_reservation(pool: PgPool) -> (Reservation, ReservationManager) {
