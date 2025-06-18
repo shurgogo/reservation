@@ -1,8 +1,8 @@
 use abi::{ReservationId, ReservationQuery, ReservationStatus, Validator};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use sqlx::Row;
 use sqlx::postgres::types::PgRange;
-use sqlx::{Row, types::Uuid};
 
 use crate::{ReservationManager, Rsvp};
 
@@ -16,7 +16,7 @@ impl Rsvp for ReservationManager {
         let status = ReservationStatus::try_from(rsvp.status).unwrap_or(ReservationStatus::Pending);
 
         // generate an insert sql for the reservation
-        let id: Uuid = sqlx::query(
+        let id = sqlx::query(
             "INSERT INTO rsvp.reservations
                  (user_id, resource_id, timespan, note, status)
                  VALUES ($1, $2, $3, $4, $5::rsvp.reservation_status)
@@ -30,13 +30,13 @@ impl Rsvp for ReservationManager {
         .fetch_one(&self.pool)
         .await?
         .get(0);
-        rsvp_clone.id = id.to_string();
+        rsvp_clone.id = id;
         Ok(rsvp_clone)
     }
 
     async fn change_status(&self, id: ReservationId) -> Result<abi::Reservation, abi::Error> {
         // if current status is pending, change it to confirmed, otherwise do nothing
-        let id = Uuid::parse_str(&id).map_err(|_| abi::Error::InvalidReservationId(id.clone()))?;
+        id.validate()?;
         let rsvp: abi::Reservation = sqlx::query_as(
             "UPDATE rsvp.reservations SET status = 'confirmed' WHERE id = $1 AND status = 'pending' RETURNING *"
         ).bind(id).fetch_one(&self.pool).await?;
@@ -49,7 +49,7 @@ impl Rsvp for ReservationManager {
         id: crate::ReservationId,
         note: String,
     ) -> Result<abi::Reservation, abi::Error> {
-        let id = Uuid::parse_str(&id).map_err(|_| abi::Error::InvalidReservationId(id.clone()))?;
+        id.validate()?;
         let rsvp: abi::Reservation =
             sqlx::query_as("UPDATE rsvp.reservations SET note = $1 WHERE id = $2 RETURNING *")
                 .bind(note)
@@ -60,7 +60,7 @@ impl Rsvp for ReservationManager {
     }
 
     async fn get(&self, id: ReservationId) -> Result<abi::Reservation, abi::Error> {
-        let id = Uuid::parse_str(&id).map_err(|_| abi::Error::InvalidReservationId(id.clone()))?;
+        id.validate()?;
         let rsvp: abi::Reservation =
             sqlx::query_as("SELECT * FROM rsvp.reservations WHERE id = $1")
                 .bind(id)
@@ -71,7 +71,7 @@ impl Rsvp for ReservationManager {
     }
 
     async fn delete(&self, id: crate::ReservationId) -> Result<(), abi::Error> {
-        let id = Uuid::parse_str(&id).map_err(|_| abi::Error::InvalidReservationId(id.clone()))?;
+        id.validate()?;
         let rsvp = sqlx::query_as("DELETE FROM rsvp.reservations WHERE id = $1 RETURNING *")
             .bind(id)
             .fetch_one(&self.pool)
@@ -125,7 +125,7 @@ mod tests {
     #[sqlx::test(migrations = "../migrations")]
     async fn reserve_should_work_for_valid_window(pool: PgPool) {
         let (rsvp, _) = make_shur_reservation(pool).await;
-        assert!(!rsvp.id.is_empty());
+        assert!(rsvp.id != 0);
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -187,7 +187,7 @@ mod tests {
     #[sqlx::test(migrations = "../migrations")]
     async fn get_reservation_should_work(pool: PgPool) {
         let (rsvp1, manager) = make_shur_reservation(pool).await;
-        let rsvp2 = manager.get(rsvp1.id.clone()).await.unwrap();
+        let rsvp2 = manager.get(rsvp1.id).await.unwrap();
 
         assert_eq!(rsvp1, rsvp2);
     }
@@ -195,7 +195,7 @@ mod tests {
     #[sqlx::test(migrations = "../migrations")]
     async fn delete_reservation_should_work(pool: PgPool) {
         let (rsvp, manager) = make_shur_reservation(pool).await;
-        manager.delete(rsvp.id.clone()).await.unwrap();
+        manager.delete(rsvp.id).await.unwrap();
         let rsvp1 = manager.get(rsvp.id).await.unwrap_err();
         assert_eq!(rsvp1, abi::Error::NotFound);
     }

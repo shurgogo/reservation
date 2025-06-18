@@ -8,7 +8,7 @@ pub use pb::*;
 
 pub use utils::*;
 
-pub type ReservationId = String;
+pub type ReservationId = i64;
 pub type UserId = String;
 pub type ResourceId = String;
 
@@ -40,12 +40,12 @@ pub enum RsvpStatus {
     Blocked,
 }
 
-//impl Validator for ReservationId {
-//    fn validate(&self) -> Result<(), Error> {
-//        if *self <= 0 {
-//            Err(Error::InvalidReservationId(*self))
-//        } else {
-//            Ok(())
-//        }
-//    }
-//}
+impl Validator for ReservationId {
+    fn validate(&self) -> Result<(), Error> {
+        if *self <= 0 {
+            Err(Error::InvalidReservationId(*self))
+        } else {
+            Ok(())
+        }
+    }
+}

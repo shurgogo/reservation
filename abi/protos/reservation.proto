@@ -22,7 +22,7 @@ enum ReservationUpdateType {
 // If SubscribeResponse.op is RESERVATION_UPDATE_TYPE_DELETE, only id will be populated.
 message Reservation {
     // unique id for the reservation
-    string id = 1;
+    int64 id = 1;
     string user_id = 2;
     ReservationStatus status = 3;
 
